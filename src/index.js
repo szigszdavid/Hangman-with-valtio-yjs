@@ -92,19 +92,19 @@ hangmanState.gameState.content = "game"
 
 subscribe(hangmanState.word, () => {
   console.log("Az új szó: ",hangmanState.word.content);
-  hangmanMap.set("state", hangmanState)
+  //hangmanMap.set("state", hangmanState)
   //UpdateWindow();
 })
 
 subscribe(hangmanState.letters, () => {
   console.log("Letters tartalma: " + hangmanState.letters);
-  hangmanMap.set("state", hangmanState)
+  //hangmanMap.set("state", hangmanState)
   //UpdateWindow();
 })
 
 subscribe(hangmanState.guesses, () => {
   console.log("A guesses tartalma: ", hangmanState.guesses);
-  hangmanMap.set("state", hangmanState)
+  //hangmanMap.set("state", hangmanState)
   //UpdateWindow();
 })
 
@@ -114,7 +114,7 @@ subscribe(hangmanState.gameState, () => {
   //UpdateWindow();
 })
 
-hangmanMap.set("state", hangmanState)
+//hangmanMap.set("state", hangmanState)
 
 window.word = word
 /*
