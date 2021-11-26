@@ -1,18 +1,36 @@
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
-//import { YArray, YMap } from 'yjs/dist/src/internals';
-//import { integretyCheck } from 'yjs/dist/src/internals'
-
-//import "./styles.css";
+import { proxy,subscribe } from 'valtio'
 
 let gameState = "game"; // 'won', 'lost'
-
 // Selected elements
 const wordDiv = document.querySelector("#the-word");
 const lettersDiv = document.querySelector("#letters");
 const scoreDiv = document.querySelector("#score");
 const endOfGameDiv = document.querySelector("#end-of-game");
 const endOfGameSpan = document.querySelector("#end-of-game span");
+
+const MAX_BAD_ATTEMPTS = 9;
+const wordList = ["alma", "körte", "szilva", "barack", "szótár"];
+let word = wordList[random(0,wordList.length - 1)];
+//hangmanMap.set("word", word)
+
+let buttons = "aábcdeéfghiíjklmnoóöőpqrstuúüűvwxyz";
+
+const newGameButton = document.querySelector("#newgame")
+newGameButton.addEventListener("click", () => {
+  NewGame()  
+})
+
+//const hangmanState = proxy({ obj: ' ', arr: ['hello'] })
+/* Állapottér elemei
+- word
+- letters
+- guesses
+- gameState
+*/
+
+///YJS
 
 const doc = new Y.Doc()
 const wsProvider = new WebsocketProvider('ws://localhost:1234', 'david', doc)
@@ -21,25 +39,95 @@ wsProvider.on('status', event => {
   console.log(event.status) // logs "connected" or "disconnected"
 })
 
-/* Régi megoldás
-const guesses = doc.getArray('my-array')
-const newWord = doc.getArray('new-word')
-const buttonDisable = doc.getArray('buttons')
-*/
-
-/* Új megközelítés */
 const hangmanMap = doc.getMap("hangmanMap")
-/* Állapottér elemei
-- word
-- letters
-- guesses
-- gameState
+
+hangmanMap.observe(ymapEvent => {
+  ymapEvent.target === hangmanMap // => true
+  // Find out what changed: 
+  // Option 1: A set of keys that changed
+  ymapEvent.keysChanged // => Set<strings>
+  // Option 2: Compute the differences
+  ymapEvent.changes.keys // => Map<string, { action: 'add'|'update'|'delete', oldValue: any}>
+  // sample code.
+  ymapEvent.changes.keys.forEach((change, key) => {
+    if (change.action === 'add') {
+      console.log(`Property "${key}" was added. Initial value: "${hangmanMap.get(key)}".`)
+    } else if (change.action === 'update') {
+      console.log(`Property "${key}" was updated. New value: "${hangmanMap.get(key)}". Previous value: "${change.oldValue}".`)
+    } else if (change.action === 'delete') {
+      console.log(`Property "${key}" was deleted. New value: undefined. Previous value: "${change.oldValue}".`)
+    }
+    
+  })
+  
+  console.log("Tartalma: " + hangmanMap.get("state"));
+ 
+  console.log("Előtte: " + word + " " + hangmanState.guesses);
+  word = hangmanMap.get("state").word.content
+  hangmanState.guesses = hangmanMap.get("state").guesses
+  gameState = hangmanMap.get("state").gameState.content
+  console.log("Utána: " + word + " " + hangmanState.guesses);
+  //gameState = hangmanMap.get("state").gameState.content
+  
+  
+  UpdateWindow()  
+  lettersDiv.innerHTML = buttons
+  .split("")
+  .map((letter) => hangmanMap.get("state").guesses.includes(letter) ?  `<button disabled="true">${letter}</button>` : `<button>${letter}</button>`)
+  .join("");
+  
+})
+
+///VALTIO
+
+const hangmanState = proxy({ word: {content: ' '}, letters: {content: ' '}, gameState: {content: ' '}, guesses: [] })
+
+hangmanState.word.content = word
+hangmanMap.set("state", hangmanState)
+hangmanState.guesses = []
+//let guesses = [];
+//hangmanMap.set("gameState","game")
+hangmanState.gameState.content = "game"
+
+
+subscribe(hangmanState.word, () => {
+  console.log("Az új szó: ",hangmanState.word.content);
+  hangmanMap.set("state", hangmanState)
+  //UpdateWindow();
+})
+
+subscribe(hangmanState.letters, () => {
+  console.log("Letters tartalma: " + hangmanState.letters);
+  hangmanMap.set("state", hangmanState)
+  //UpdateWindow();
+})
+
+subscribe(hangmanState.guesses, () => {
+  console.log("A guesses tartalma: ", hangmanState.guesses);
+  hangmanMap.set("state", hangmanState)
+  //UpdateWindow();
+})
+
+
+subscribe(hangmanState.gameState, () => {
+  console.log("A gameState állapota: " + hangmanState.gameState.content);
+  //UpdateWindow();
+})
+
+hangmanMap.set("state", hangmanState)
+
+window.word = word
+/*
+subscribe(state.arr, () => console.log('state.arr has changed to', state.arr))
+state.arr.push('world')
 */
 
-
+/*
 hangmanMap.set("guesses", "")
 let tempGuesses = hangmanMap.get("guesses").toString() + ""
 hangmanMap.set("guesses",tempGuesses)
+*/
+
 
 
 /* Régi megoldás
@@ -87,62 +175,24 @@ buttonDisable.observe(yarrayEvent => {
 window.guesses = guesses
 window.newWord = newWord
 */
-// Data + business logic
-const MAX_BAD_ATTEMPTS = 9;
-const wordList = ["alma", "körte", "szilva", "barack", "szótár"];
-let word = wordList[random(0,wordList.length - 1)];
-hangmanMap.set("word", word)
-console.log("Ez került a wordbe: " + hangmanMap.get("word"));
-let buttons = "aábcdeéfghiíjklmnoóöőpqrstuúüűxyz";
-//let guesses = [];
-hangmanMap.set("gameState","game")
 
-const newGameButton = document.querySelector("#newgame")
-newGameButton.addEventListener("click", () => {
-  NewGame()  
-})
+// Data + business logic
 
 let currentAnswer
 
-hangmanMap.observe(ymapEvent => {
-  ymapEvent.target === hangmanMap // => true
-  // Find out what changed: 
-  // Option 1: A set of keys that changed
-  ymapEvent.keysChanged // => Set<strings>
-  // Option 2: Compute the differences
-  ymapEvent.changes.keys // => Map<string, { action: 'add'|'update'|'delete', oldValue: any}>
-  // sample code.
-  ymapEvent.changes.keys.forEach((change, key) => {
-    if (change.action === 'add') {
-      console.log(`Property "${key}" was added. Initial value: "${hangmanMap.get(key)}".`)
-    } else if (change.action === 'update') {
-      console.log(`Property "${key}" was updated. New value: "${hangmanMap.get(key)}". Previous value: "${change.oldValue}".`)
-    } else if (change.action === 'delete') {
-      console.log(`Property "${key}" was deleted. New value: undefined. Previous value: "${change.oldValue}".`)
-    }
-    
-  })
-
-  word = hangmanMap.get("word")
-  gameState = hangmanMap.get("gameState")
-  
-  UpdateWindow()  
-  lettersDiv.innerHTML = buttons
-  .split("")
-  .map((letter) => hangmanMap.get("guesses").split("").includes(letter) ?  `<button disabled="true">${letter}</button>` : `<button>${letter}</button>`)
-  .join("");
-})
 
 
 function NewGame()
 {
   gameState = "game"
-  hangmanMap.set("word",wordList[random(0,wordList.length - 1)].toString())
-  hangmanMap.set("guesses","")
-  hangmanMap.set("gameState","game")
+  //hangmanMap.set("word",wordList[random(0,wordList.length - 1)].toString())
+  //hangmanMap.set("guesses","")
+  hangmanState.guesses = [];
+  //hangmanMap.set("gameState","game")
+  hangmanState.gameState.content = "game"
   lettersDiv.hidden = false;
   endOfGameDiv.hidden = true;
-  endOfGameSpan.innerHTML = gameState === "lost" ? "You lost!" : "You won!";
+  endOfGameSpan.innerHTML = hangmanState.gameState.content === "lost" ? "You lost!" : "You won!";
 
   //#region Régi guesses és buttonDisable YArrayok 
   //Clear YArray
@@ -151,8 +201,10 @@ function NewGame()
   //#endregion
 
   //Clear characters
-  //word = wordList[random(0, wordList.length - 1)];
-
+  word = wordList[random(0, wordList.length - 1)];
+  hangmanState.word.content = word
+  hangmanMap.set("state", hangmanState)
+  
   //#region Régi közös kitalálandó kiválasztása
   /*
   if(newWord.length == 0)
@@ -175,13 +227,15 @@ function NewGame()
   */
  //#endregion
   //hangmanMap.set("word",[word])
-  wordDiv.innerHTML = genWord(word, hangmanMap.get("guesses"),gameState);
+  
+  wordDiv.innerHTML = genWord(word, hangmanState.guesses,gameState);
 
   //Clear score div
-  scoreDiv.innerHTML = genScore(word, hangmanMap.get("guesses"));
+  scoreDiv.innerHTML = genScore(word, hangmanState.guesses);
 
   //Clear svg
-  //const bads = badAttempts(word, hangmanMap.get("guesses"))
+  const bads = badAttempts(word, hangmanState.guesses)
+  
   const svg = document.querySelector("svg")
   svg.innerHTML = ""
 
@@ -196,11 +250,12 @@ function NewGame()
 
 function UpdateWindow()
 {
-    wordDiv.innerHTML = genWord(word, hangmanMap.get("guesses"), gameState);
-    scoreDiv.innerHTML = genScore(word, hangmanMap.get("guesses"));
+    wordDiv.innerHTML = genWord(word, hangmanState.guesses, gameState);
+    scoreDiv.innerHTML = genScore(word, hangmanState.guesses);
     // imperative
     //e.target.disabled = true;
-    const bads = badAttempts(word, hangmanMap.get("guesses"))
+    const bads = badAttempts(word, hangmanState.guesses)
+    
     
     for (let i = 0; i <= bads; i++) 
     {
@@ -208,14 +263,15 @@ function UpdateWindow()
       svgEl?.classList.add("show");  
     }
 
-    console.log("Current gameState: " + hangmanMap.get("gameState"));
+
+    console.log("Current gameState: " + hangmanState.gameState.content);
     if (bads >= MAX_BAD_ATTEMPTS) {
       gameState = "lost";
     }
-    if (isWon(word, hangmanMap.get("guesses"))) {
+    if (isWon(word, hangmanState.guesses)) {
       gameState = "won";
     }
-    console.log("Current2 gameState: " + hangmanMap.get("gameState"));
+    console.log("Current2 gameState: " + hangmanState.gameState.content);
     if (gameState != "game") {
       lettersDiv.hidden = true;
       endOfGameDiv.hidden = false;
@@ -226,19 +282,16 @@ function UpdateWindow()
       lettersDiv.hidden = false;
       endOfGameDiv.hidden = true;
     }
+
 }
 
 function badAttempts(word, guesses) {
-  console.log("BadAttempts Word: " + word.toString().split(""));
-  console.log("Guesses: " + guesses.split(""));
-  return guesses.split("").filter((guess) => !word.toString().split("").includes(guess)).length;
+  console.log("Attempts: " + guesses);
+  //console.log("Guesses: " + guesses.split(""));
+  return guesses.filter((guess) => !word.toString().split("").includes(guess)).length;
 }
 function isWon(word, guesses) {
-  return word.toString().split("").every((letter) => Array.from(guesses).includes(letter));
-}
-function init() {
-  word = "alma";
-  gameState = "game";
+  return word.toString().split("").every((letter) => guesses.includes(letter));
 }
 
 // Helper function
@@ -261,22 +314,26 @@ function onLetterClick(e) {
     //guesses.delete(1,5)
     */
     //Guesses String bővítése
-    let tempGuesses = hangmanMap.get("guesses")
-    tempGuesses = tempGuesses + letter
-    hangmanMap.set("guesses", tempGuesses)
     
-    const bads = badAttempts(word, hangmanMap.get("guesses"));
+    console.log("Click előtt " + word + " " + hangmanState.word.content);
+    hangmanState.guesses.push(letter);
+    console.log("Click közben " + word + " " + hangmanState.word.content);
+    hangmanState.word.content = word
+    hangmanMap.set("state", hangmanState)
+    console.log("Click után " + word + " " + hangmanState.word.content);
+
+    const bads = badAttempts(word, hangmanState.guesses);
     
     if (bads >= MAX_BAD_ATTEMPTS) {
       gameState = "lost";
     }
-    if (isWon(word, hangmanMap.get("guesses"))) {
+    if (isWon(word, hangmanState.guesses)) {
       gameState = "won";
     }
     // Write output
     // declarative
-    wordDiv.innerHTML = genWord(word, hangmanMap.get("guesses"), gameState);
-    scoreDiv.innerHTML = genScore(word, hangmanMap.get("guesses"));
+    wordDiv.innerHTML = genWord(word, hangmanState.guesses, gameState);
+    scoreDiv.innerHTML = genScore(word, hangmanState.guesses);
     // imperative
     e.target.disabled = true;
     const svgEl = document.querySelector(`svg *:nth-child(${bads})`);
@@ -289,6 +346,7 @@ function onLetterClick(e) {
     if (gameState === "won") {
       wordDiv.classList.add("won");
     }
+
   }
 }
 
@@ -300,9 +358,9 @@ function genWord(word, guesses, gameState) {
     .map(
       (letter) => `
       <span class="${
-        gameState === "lost" && !Array.from(guesses).includes(letter) ? "missing" : ""
+        gameState === "lost" && !guesses.includes(letter) ? "missing" : ""
       }">
-        ${Array.from(guesses).includes(letter) || gameState === "lost" ? letter : ""}
+        ${guesses.includes(letter) || gameState === "lost" ? letter : ""}
       </span>
     `
     )
@@ -314,10 +372,10 @@ function genScore(word, guesses) {
 }
 
 // Page load
-wordDiv.innerHTML = genWord(word, hangmanMap.get("guesses"),gameState);
+wordDiv.innerHTML = genWord(word, hangmanState.guesses,gameState);
 lettersDiv.innerHTML = buttons
   .split("")
   .map((letter) => `<button>${letter}</button>`)
   .join("");
 
-init()
+//init()
